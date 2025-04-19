@@ -25,16 +25,29 @@ header {
     text-align: left;
 }
 
-header a {
+header a:hover {
+    color : hsl(0, 0%, 67%);
+    cursor : pointer;
+}
+
+header ul {
+    display: flex;
+    gap: 1em;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+header ul li a {
+    padding: 0.5em;
     color: #fff;
     text-decoration: none;
     font-size: 1.5rem;
     font-weight: bold;
 }
 
-header a:hover {
-    color : hsl(0, 0%, 67%);
-    cursor : pointer;
+header ul li.title {
+   margin-right: 3em;
 }
 
 main {

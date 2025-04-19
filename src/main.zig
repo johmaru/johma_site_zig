@@ -5,8 +5,11 @@ const Connection = @import("std").net.Server.Connection;
 const Websocket = @import("std").http.WebSocket;
 const Request = http.Server.Request;
 
+// 自分のライブラリ
+
+const routing = @import("routing.zig");
+
 const MAX_BUFFER_SIZE = 1024;
-const HTML_TYPE_1 = "ようこそ、私のサイトへ";
 
 pub fn main() !void {
     server_run() catch |err| {
@@ -71,101 +74,11 @@ fn accept(conn: Connection) !void {
 }
 
 fn serveHttp(request: *Request,conn: Connection) !void {
-    const allocator = std.heap.page_allocator;
-
-    var buf : [256]u8 = undefined;
-    var uri = request.head.target;
-
-    if (std.mem.startsWith(u8, uri, "/api/typing")) {
-        const w = conn.stream.writer();
-        try w.writeAll(
-        "HTTP/1.1 200 OK\r\n" ++
-        "Content-Type: text/event-stream; charset=utf-8\r\n" ++
-        "Cache-Control: no-cache\r\n" ++
-        "Connection: keep-alive\r\n" ++
-        "\r\n",
-        );
-
-        {
-            var it = std.unicode.Utf8Iterator{ .bytes = HTML_TYPE_1, .i = 0 };
-
-            while (it.nextCodepoint()) |_| { 
-                const slice = HTML_TYPE_1[0 .. it.i];
-                const res = w.writeAll("event: message\ndata: ") catch |e| {
-                    if (e == error.ConnectionResetByPeer) return;
-                    return e;
-                };
-                _ = res;
-
-                try w.writeAll(slice);
-                try w.writeAll("\n\n");
-                std.time.sleep(1 * std.time.ns_per_s);
-            }
-
-            _ = w.writeAll("event: end\ndata: done\n\n") catch {};
-            while (true) {
-                try w.writeAll(": keep-alive\n\n");
-                std.time.sleep(30 * std.time.ns_per_s);
-            }
-        }
-    }
-
-    if (std.mem.indexOfScalar(u8, uri, '?')) |i| {
-        // Remove query string
-        uri = uri[0..i];
-    }
-
-    const local_path = if (std.mem.eql(u8, uri, "/") or
-        std.mem.eql(u8, uri, "/index.html"))
-        "src/html/index.html"
-        else blk: {
-            const rel = uri[1..];
-            const p = try std.fmt.bufPrint(&buf, "src/{s}", .{rel});
-            break :blk p;
-        };    
-
-    const ext = std.fs.path.extension(local_path);
-    const content_type =
-        if (std.mem.eql(u8, ext, ".css"))
-            "text/css; charset=utf-8"
-        else if (std.mem.eql(u8, ext, ".js"))
-            "text/javascript; charset=utf-8"
-        else if (std.mem.eql(u8, ext, ".html"))
-            "text/html; charset=utf-8"
-        else
-            "application/octet-stream";
-
-    const file = std.fs.cwd().openFile(local_path, .{}) catch |e| switch (e) {
-        error.FileNotFound => {
-            std.debug.print("File not found: {s}\n", .{local_path});
-
-            try request.respond("404 Not Found", .{
-                .status = .not_found,
-                .extra_headers = &.{
-                    .{
-                        .name = "Content-Type",
-                        .value = "text/plain; charset=utf-8",
-                    }
-                }
-            });
-            return;
-        },
-        else => return e,
+    routing.route(request, conn) catch |err| {
+        if (err == error.HttpConnectionClosing) return;
+        log.err("Error in routing: {s}", .{@errorName(err)});
+        return err;
     };
-    defer file.close();
-    const contents = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
-
-    try request.respond(
-        contents,
-        .{
-            .extra_headers = &[_]http.Header{
-                http.Header{
-                    .name = "Content-Type",
-                    .value = content_type,
-                },
-            },
-        },
-    );
 }
 
 
