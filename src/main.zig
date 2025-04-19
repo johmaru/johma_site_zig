@@ -20,7 +20,7 @@ pub fn main() !void {
 }
 
 pub fn server_run() !void {
-    const addr = try std.net.Address.parseIp("127.0.0.1", 8080);
+    const addr = try std.net.Address.parseIp("0.0.0.0", 8080);
     var server = try std.net.Address.listen(addr, .{.reuse_address = true});
     defer server.deinit();
 
