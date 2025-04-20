@@ -72,8 +72,16 @@ pub fn route(request: *Request,conn: Connection) !void {
     defer file.close();
     const contents = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
 
+    var processed_cotents = std.ArrayList(u8).fromOwnedSlice(allocator, contents);
+    defer processed_cotents.deinit();
+
+    if (std.mem.startsWith(u8, content_type, "text/html")) {
+        try replacePlaceholder(&processed_cotents, "{{HEAD}}", "src/html/_head.html", allocator);
+        try replacePlaceholder(&processed_cotents, "{{HEADER}}", "src/html/_header.html", allocator);
+    }
+
     try request.respond(
-        contents,
+        processed_cotents.items,
         .{
             .extra_headers = &[_]http.Header{
                 http.Header{
@@ -83,6 +91,22 @@ pub fn route(request: *Request,conn: Connection) !void {
             },
         },
     );
+}
+
+fn replacePlaceholder(
+    list: *std.ArrayList(u8),
+    placeholder: []const u8,
+    path: []const u8,
+    allocator: std.mem.Allocator,
+) !void {
+    if (std.mem.indexOf(u8, list.items, placeholder)) |pos|{
+        const f = try std.fs.cwd().openFile(path, .{});
+        defer f.close();
+        const tpl = try f.readToEndAlloc(allocator, std.math.maxInt(usize));
+        defer allocator.free(tpl);
+
+        try list.replaceRange(pos, placeholder.len, tpl);
+    }
 }
 
 fn api(uri:[]const u8, conn: Connection) !bool {
