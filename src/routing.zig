@@ -1,8 +1,8 @@
 const std = @import("std");
-const http = @import("std").http;
-const log = @import("std").log;
-const Connection = @import("std").net.Server.Connection;
-const Websocket = @import("std").http.WebSocket;
+const http = std.http;
+const log = std.log;
+const Connection = std.net.Server.Connection;
+const Websocket = std.http.WebSocket;
 const Request = http.Server.Request;
 
 const HTML_TYPE_1 = "ようこそ、私のサイトへ";
@@ -18,10 +18,14 @@ pub fn route(request: *Request,conn: Connection) !void {
         return;
     }
 
+    if (std.mem.startsWith(u8, uri, "/toggle-theme")) {
+        try toggle_theme(request);
+        return;
+    }
+
     
 
     if (std.mem.indexOfScalar(u8, uri, '?')) |i| {
-        // Remove query string
         uri = uri[0..i];
     }
 
@@ -121,6 +125,43 @@ fn api(uri:[]const u8, conn: Connection) !bool {
         return true;
     }
     return false;
+}
+
+fn getHeaderValue(req: *Request, name: []const u8) ?[]const u8 {
+    var it = req.iterateHeaders();
+    while (it.next()) |h| {
+        if (std.ascii.eqlIgnoreCase(h.name, name)) {
+            return h.value;
+        }
+    }
+    return null;
+}
+
+fn toggle_theme(req: *Request) !void {
+    const dark_cookie = "theme=dark";
+    const light_cookie = "theme=light";
+
+    var want_dark = true;
+    if (getHeaderValue(req, "cookie")) |cookie_line| {
+        if (std.mem.indexOf(u8, cookie_line, dark_cookie) != null) {
+            want_dark = false;
+        }
+    }
+
+    const cookie_val = if (want_dark) dark_cookie else light_cookie;
+    var buf: [128]u8 = undefined;
+    const set_cookie = try std.fmt.bufPrint(
+        &buf,
+        "{s}; Path=/; Max-Age=31536000",
+        .{ cookie_val },
+    );
+    try req.respond("", .{
+        .status = .no_content,
+        .extra_headers = &[_]http.Header{
+            .{ .name = "Set-Cookie", .value = set_cookie },
+            .{ .name = "HX-Refresh", .value = "true" },
+        },
+    });
 }
 
 fn write_to_html(string_type: []const u8, conn: Connection) !void {

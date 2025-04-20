@@ -5,4 +5,10 @@
     <script src="https://unpkg.com/htmx-ext-sse@2.2.2"></script>
     <title>Johmaのホームページ</title>
     <link rel="stylesheet" href="../css/style.css">
+    <script>
+        if (document.cookie.split('; ')
+              .some(c => c.trim().startsWith('theme=dark'))) {
+          document.documentElement.classList.add('dark');
+        }
+      </script>
 </head>
