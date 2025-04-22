@@ -5,25 +5,63 @@ const Connection = std.net.Server.Connection;
 const Websocket = std.http.WebSocket;
 const Request = http.Server.Request;
 
-const HTML_TYPE_1 = "ようこそ、私のサイトへ";
-const HTML_TYPE_2 = "Johmaru";
 
+
+pub const TypingItem = struct {
+
+    const HTML_TYPE_1 = "ようこそ、私のサイトへ";
+    const HTML_TYPE_2 = "作者 Johmaru";
+    allocator: *std.mem.Allocator = undefined,
+
+    var map = std.HashMap([]const u8, []const u8, std.hash_map.StringContext, std.hash_map.default_max_load_percentage,).init(std.heap.page_allocator);
+
+    const Self = @This();
+
+    pub fn init(allocator: *std.mem.Allocator) !TypingItem {
+
+        map.put("/ws/typing", HTML_TYPE_1) catch |err| {
+            std.debug.print("Failed to put value in map: {s}\n", .{@errorName(err)});
+            return err;
+        };
+        map.put("ws/typing2", HTML_TYPE_2) catch |err| {
+            std.debug.print("Failed to put value in map: {s}\n", .{@errorName(err)});
+            return err;
+        };
+
+
+        return TypingItem{
+            .allocator = allocator
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        map.deinit();
+        self.allocator.destroy(self);
+    }
+    
+};
+
+// ルーティング関数
 pub fn route(request: *Request,conn: Connection) !void {
     const allocator = std.heap.page_allocator;
 
     var buf : [256]u8 = undefined;
     var uri = request.head.target;
 
+    // 一番最初にwebsocketを探索
+    if (try websocket_handler(request)) return;
+
+
+    // 次にapiを探索
     if (try api(uri, conn)) {
         return;
     }
 
+    // テーマはapiの後に探索
     if (std.mem.startsWith(u8, uri, "/toggle-theme")) {
         try toggle_theme(request);
         return;
     }
-
-    
 
     if (std.mem.indexOfScalar(u8, uri, '?')) |i| {
         uri = uri[0..i];
@@ -45,6 +83,8 @@ pub fn route(request: *Request,conn: Connection) !void {
             break :blk p;
         };    
 
+    // 対応拡張子 html css js
+    // それ以外はapplication/octet-stream
     const ext = std.fs.path.extension(local_path);
     const content_type =
         if (std.mem.eql(u8, ext, ".css"))
@@ -76,6 +116,8 @@ pub fn route(request: *Request,conn: Connection) !void {
     defer file.close();
     const contents = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
 
+
+    // 簡易なテンプレートエンジン
     var processed_cotents = std.ArrayList(u8).fromOwnedSlice(allocator, contents);
     defer processed_cotents.deinit();
 
@@ -97,6 +139,7 @@ pub fn route(request: *Request,conn: Connection) !void {
     );
 }
 
+// プレースホルダを置き換える関数
 fn replacePlaceholder(
     list: *std.ArrayList(u8),
     placeholder: []const u8,
@@ -113,20 +156,22 @@ fn replacePlaceholder(
     }
 }
 
+// APIのルーティング
 fn api(uri:[]const u8, conn: Connection) !bool {
 
     if (std.mem.startsWith(u8, uri, "/api/typing1")) {
-        const string_type = HTML_TYPE_1;
+        const string_type = TypingItem.HTML_TYPE_1;
         try write_to_html(string_type, conn);
         return true;
     } else if (std.mem.startsWith(u8, uri, "/api/typing2")) {
-        const string_type = HTML_TYPE_2;
+        const string_type = TypingItem.HTML_TYPE_2;
         try write_to_html(string_type, conn);
         return true;
     }
     return false;
 }
 
+// ヘッダの値を取得する関数
 fn getHeaderValue(req: *Request, name: []const u8) ?[]const u8 {
     var it = req.iterateHeaders();
     while (it.next()) |h| {
@@ -164,6 +209,36 @@ fn toggle_theme(req: *Request) !void {
     });
 }
 
+fn websocket_handler(req: *Request) !bool {
+    var iter = TypingItem.map.iterator();
+    while (iter.next()) |item| {
+
+        if (std.mem.eql(u8, req.head.target, item.key_ptr.*)) {
+            var send_buf: [4096]u8 = undefined;
+            var recv_buf: [4096]u8 align(4) = undefined;
+
+            var ws: Websocket = undefined;
+
+
+            const upgraded = try Websocket.init(&ws, req, &send_buf, &recv_buf);
+            if (!upgraded) return false;
+            
+            var it = std.unicode.Utf8Iterator{ .bytes = item.value_ptr.*, .i = 0 };
+            var prev: usize = 0;
+            while (it.nextCodepoint()) |_| {
+                try ws.writeMessage(item.value_ptr.*[prev..it.i], .text);
+                prev = it.i;
+                std.time.sleep(300 * std.time.ns_per_ms);
+            }
+            _ = ws.writeMessage(&.{}, .connection_close) catch {};
+            
+            return true;
+        }
+    }
+    return false;
+}
+ 
+// タイピングの文字列をHTMLに書き込む関数(SSE)
 fn write_to_html(string_type: []const u8, conn: Connection) !void {
     const w = conn.stream.writer();
     try w.writeAll(

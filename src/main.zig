@@ -12,6 +12,12 @@ const routing = @import("routing.zig");
 const MAX_BUFFER_SIZE = 1024;
 
 pub fn main() !void {
+    var allocator = std.heap.page_allocator;
+    _ = routing.TypingItem.init(&allocator) catch |err| {
+        log.err("Failed to initialize TypingItem: {s}", .{@errorName(err)});
+        return err;
+    };
+
     server_run() catch |err| {
         log.err("Server error: {s}", .{@errorName(err)});
         return err;
@@ -55,29 +61,17 @@ fn accept(conn: Connection) !void {
             else => return err,
         };
 
-        var ws: Websocket = undefined;
-        var send_buf: [MAX_BUFFER_SIZE]u8 = undefined;
-        var recv_buf: [MAX_BUFFER_SIZE]u8 align(4) = undefined;
-
-        if (try ws.init(&request, &send_buf, &recv_buf)){
-            serveWebSocket(&ws) catch |err| switch (err) {
-                error.ConnectionClose => {
-                    log.info("Client({any}) closed!", .{conn.address});
-                    break;
-                },
-                else => return err,
-            };
-        } else {
-            try serveHttp(&request, conn);
-        }
+        try serveHttp(&request, conn);
+    
     }
 }
 
 fn serveHttp(request: *Request,conn: Connection) !void {
     routing.route(request, conn) catch |err| {
         if (err == error.HttpConnectionClosing) return;
-        log.err("Error in routing: {s}", .{@errorName(err)});
-        return err;
+        if (err == error.ConnectionResetByPeer and std.mem.eql(u8, request.head.target, "/ws/typing")) return;
+        log.err("Error in routing ({s}): {s}", .{request.head.target, @errorName(err)});
+        _ = request.respond("500 Internal Server Error", .{ .status = .internal_server_error }) catch {};
     };
 }
 

@@ -11,4 +11,14 @@
           document.documentElement.classList.add('dark');
         }
       </script>
+    <script>
+      const ws = new WebSocket("ws://localhost:8080/ws/typing");
+      let buffer = "";
+      ws.onmessage = e => {
+        buffer += e.data;
+        console.log("Received:", buffer);
+        document.getElementById("typing").textContent = buffer;
+      };
+      ws.onclose = () => console.log("closed");
+      </script>
 </head>
