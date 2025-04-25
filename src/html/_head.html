@@ -2,23 +2,137 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script src="https://unpkg.com/htmx-ext-sse@2.2.2"></script>
     <title>Johmaのホームページ</title>
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/tail.css">
     <script>
         if (document.cookie.split('; ')
               .some(c => c.trim().startsWith('theme=dark'))) {
           document.documentElement.classList.add('dark');
         }
-      </script>
+    </script>
+
     <script>
-      const ws = new WebSocket("ws://localhost:8080/ws/typing");
-      let buffer = "";
-      ws.onmessage = e => {
-        buffer += e.data;
-        console.log("Received:", buffer);
-        document.getElementById("typing").textContent = buffer;
-      };
-      ws.onclose = () => console.log("closed");
-      </script>
+      let typingWs = null;
+      let typing2Ws = null;
+
+      function closeWebSocket(ws, name, reasonCode = 1000, reasonDesc = "クラアント初期化するため閉める") {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+          ws.close(reasonCode, reasonDesc);
+        }
+        return null;
+      }
+
+
+      function setupWebSocketConnections() {
+
+        typingWs = closeWebSocket(typingWs, "typingWs", 1000, "再接続または要素変更");
+        typing2Ws = closeWebSocket(typing2Ws, "typing2Ws", 1000, "再接続または要素変更");
+
+        setTimeout(() => {
+            const typingElement = document.getElementById('typing');
+            const typing2Element = document.getElementById('typing2');
+
+            if (typingElement && !typingWs) {
+              try {
+                const ws = new WebSocket("ws://localhost:8080/ws/typing");
+                typingWs = ws;
+                let buffer = "";
+
+                ws.onmessage = e => {
+                  buffer += e.data;
+                  const currentElement = document.getElementById("typing");
+                  if (currentElement) {
+                    currentElement.textContent = buffer;
+                  } else {
+            
+                    if (typingWs === ws) {
+                        typingWs = closeWebSocket(ws, "typingWs", 1006, "ターゲット要素が消えた");
+                    }
+                  }
+                };
+
+                ws.onclose = (event) => {
+                  if (typingWs === ws) {
+                    typingWs = null;
+                  }
+                };
+
+                ws.onerror = (error) => {
+                  console.error("typingWs error:", error);
+                  if (typingWs === ws) {
+                    typingWs = null;
+                  }
+                };
+              } catch (error) {
+                console.error("typingWsが作成出来ません:", error);
+                typingWs = null; 
+              }
+            } else if (!typingElement && typingWs) {
+                typingWs = closeWebSocket(typingWs, "typingWs", 1006, "ターゲット要素が消えた");
+            }
+
+           
+            if (typing2Element && !typing2Ws) {
+              try {
+                const ws = new WebSocket("ws://localhost:8080/ws/typing2");
+                typing2Ws = ws;
+                let buffer = "";
+
+                ws.onmessage = e => {
+                  buffer += e.data;
+                  const currentElement = document.getElementById("typing2");
+                  if (currentElement) {
+                    currentElement.textContent = buffer;
+                  } else {
+                    if (typing2Ws === ws) {
+                        typing2Ws = closeWebSocket(ws, "typing2Ws", 1006, "ターゲット要素が消えた");
+                    }
+                  }
+                };
+
+                ws.onclose = (event) => {
+                  if (typing2Ws === ws) {
+                    typing2Ws = null;
+                  }
+                };
+
+                ws.onerror = (error) => {
+                  console.error("typing2Ws error:", error);
+                  if (typing2Ws === ws) {
+                    typing2Ws = null;
+                  }
+                };
+              } catch (error) {
+                console.error("typing2Wsが作成できません:", error);
+                typing2Ws = null;
+              }
+            } else if (!typing2Element && typing2Ws) {
+                typing2Ws = closeWebSocket(typing2Ws, "typing2Ws", 1006, "ターゲット要素が消えた");
+            }
+        }, 0);
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+          setupWebSocketConnections();
+
+          if (document.body) {
+              document.body.addEventListener('htmx:afterSwap', setupWebSocketConnections);
+              document.body.addEventListener('htmx:sendError', function(evt) {
+                console.error("htmx:sendError", evt.detail);
+              });
+              document.body.addEventListener('htmx:responseError', function(evt) {
+                console.error("htmx:responseError", evt.detail);
+              });
+          } else {
+              console.error("document.bodyが見つかりません。htmxイベントを登録できません。");
+          }
+      });
+
+
+      window.addEventListener('pagehide', (event) => {
+        typingWs = closeWebSocket(typingWs, "typingWs", 1000, "クライアントが離れた");
+        typing2Ws = closeWebSocket(typing2Ws, "typing2Ws", 1000, "クライアントが離れた");
+      });
+    </script>
+
 </head>

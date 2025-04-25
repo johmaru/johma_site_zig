@@ -1,17 +1,47 @@
 <!DOCTYPE html>
 <html lang="ja">
 {{HEAD}}
-<body>
+<body class="grid grid-rows-[auto_1fr_auto] min-h-screen">
     {{HEADER}}
 
-    <main>
-        <h2 id="typing"></h2>
+    <main class="w-full max-w-4xl mx-auto px-4 py-8">
+        <div class="about flex flex-col items-center text-center">
+            <h2 id="typing" class="text-2xl font-bold mb-4"></h2>
 
+            <div class="flex justify-between w-full gap-4">
+
+                <div class="max-w-md bg-gray-100 dark:bg-gray-700 p-4 border border-gray-300 dark:border-gray-700 shadow-lg text-left">
+                    <h2 class="text-xl text-center font-semibold mb-2">最新情報</h2>
+                    <p>Contents is not found</p>
+                </div>
+
+
+                <div class="flex flex-col items-end gap-4">
+                <div
+              class="
+                     max-w-md
+                     bg-white dark:bg-gray-800
+                     p-[50px]
+                     border border-gray-300 dark:border-gray-700
+                     shadow-lg
+                     text-left">
+                    <h2 class="text-xl font-semibold mb-2">このサイトについて</h2>
+                    <p class="mb-1">このサイトは、個人の趣味やプロジェクトを紹介するためのウェブサイトです。</p>
+                    <p>サイトはZIGで一から書きました</p>
+                </div>
+
+                <div class="max-w-md text-left">
+                    <a href="https://github.com/johmaru/johma_site_zig"  class="text-blue-500 hover:underline">GitHub</a>
+                    <p class="mb-1">サイトのGitHubリポジトリへのリンクです。</p>
+               </div>
+               </div>
+
+            </div>
         </div>
     </main>
 
     <footer>
         <p>&copy; 2025 Johma. All rights reserved.</p>
-    </footer>    
-</body>    
+    </footer>
+</body>
 </html>

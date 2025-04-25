@@ -23,7 +23,7 @@ pub const TypingItem = struct {
             std.debug.print("Failed to put value in map: {s}\n", .{@errorName(err)});
             return err;
         };
-        map.put("ws/typing2", HTML_TYPE_2) catch |err| {
+        map.put("/ws/typing2", HTML_TYPE_2) catch |err| {
             std.debug.print("Failed to put value in map: {s}\n", .{@errorName(err)});
             return err;
         };
@@ -209,6 +209,7 @@ fn toggle_theme(req: *Request) !void {
     });
 }
 
+// タイピングの文字列をHTMLに書き込む関数(WebSocket)
 fn websocket_handler(req: *Request) !bool {
     var iter = TypingItem.map.iterator();
     while (iter.next()) |item| {
